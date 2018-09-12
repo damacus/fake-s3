@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  fake-s3:
+    build:
+      context: .
+    image: damacus/fake-s3:latest
+    container_name: fake-s3
+    environment:
+      - LICENSE_KEY="12346"
