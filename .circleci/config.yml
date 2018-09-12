@@ -1,0 +1,63 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: damacus/docker-builder:latest
+    working_directory: ~/project
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 18.05.0-ce
+      - run:
+          name: Build & Test Image
+          command: |
+            docker-compose up -d --build
+            inspec exec tests -t "docker://fake-s3"
+            docker-compose down
+
+  build_and_deploy:
+    docker:
+      - image: circleci/golang
+    working_directory: ~/project
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 17.11.0-ce
+      - run:
+          name: Build image
+          command: |
+            docker-compose build
+      - deploy:
+          name: Push Image
+          context: org-global
+          command: |
+            docker login -u "${DOCKER_LOGIN:?}" -p "${DOCKER_PASSWORD:?}"
+            docker-compose push fake-s3
+            docker tag damacus/fake-s3:latest damacus/fake-s3:${CIRCLE_BUILD_NUM}
+            docker push damacus/fake-s3:${CIRCLE_BUILD_NUM}
+workflows:
+  version: 2
+  build:
+    jobs:
+      - test:
+          context: org-global
+          filters:
+            branches:
+              ignore:
+                - master
+      - build_and_deploy:
+          context: org-global
+          filters:
+            branches:
+              only:
+                - master
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 10 * * 1"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - build_and_deploy
